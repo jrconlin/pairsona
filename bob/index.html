@@ -2,24 +2,15 @@
 <html>
 <head>
     <meta charset="utf-8"/>
-    <title>QR-dinate Alice page.</title>
+    <title>QR-dinate Bob page.</title>
+    <link href="../style.css" rel="stylesheet"/>
     <link href="style.css" rel="stylesheet"/>
     <meta name="viewport" content="width=device-width">
     <meta name="viewport" content="initial-scale=1.0">
 </head>
 <body>
+
 <div id="error" class="hidden"></div>
-<ul id="steps">
-    <li id="reg">Register</li>
-    <li id="sub">Get Subscription</li>
-    <!--li id="gen">Generate Data</li>
-    <li id="vap">Generate VAPID</li>
-    <li id="qr">Display QR code</li>
-    <li id="enc">Encrypt Data</li>
-    <li id="snd">Send Data</li>
-    <li id="rcv">Received Data</li>
-    <li id="dec">Data decrypted</li-->
-</ul>
 <div id="hello"></div>
 <video id="preview"></video>
 <audio src="../common/firefox.mp3" id="ring"></audio>
@@ -235,10 +226,6 @@
         data = {
             "msg": ""
         };
-        for (let x of document.getElementById("steps").getElementsByTagName("li")) {
-            x.classList.toggle("done");
-        }
-        activate("gen");
         return data;
     }
 
@@ -324,20 +311,27 @@
     }
 
     // This lib doesn't work on nightly, use beta instead...
-    let scanner = new Instascan.Scanner({
-        video: document.getElementById("preview"),
-        backgroundScan: false,
-    });
-    scanner.addListener('scan', function(content) {start_comms(content)});
-    Instascan.Camera.getCameras().then(
-        function(cameras) {
-            if (cameras.length > 0) {
-                scanner.start(cameras[0]);
-            } else {
-                show_err("No cameras found");
-            }
-        }).catch(function(e) {
-            show_err(e);
+    try {
+        let scanner = new Instascan.Scanner({
+            video: document.getElementById("preview"),
+            backgroundScan: false,
+            mirror: false,
+        
         });
+        scanner.addListener('scan', function(content) {start_comms(content)});
+        Instascan.Camera.getCameras().then(
+            function(cameras) {
+                if (cameras.length > 0) {
+                    scanner.start(cameras[0]);
+                } else {
+                    show_err("No cameras found");
+                }
+            }).catch(function(e) {
+                show_err(e);
+            });
+    } catch (e) {
+        console.error(e);
+        show_err(e + " Could not start scanner. Try running an older browser version.");
+    }
 </script>
 </html>

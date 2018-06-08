@@ -3,25 +3,33 @@
 <head>
     <meta charset="utf-8"/>
     <title>QR-dinate Alice page.</title>
+    <link href="../style.css" rel="stylesheet"/>
     <link href="style.css" rel="stylesheet"/>
     <meta name="viewport" content="width=device-width">
     <meta name="viewport" content="initial-scale=1.0">
 </head>
 <body>
 <div id="error" class="hidden"></div>
-<ul id="steps">
-    <li id="reg">Register</li>
-    <li id="sub">Get Subscription</li>
-    <!--li id="gen">Generate Data</li>
-    <li id="vap">Generate VAPID</li>
-    <li id="qr">Display QR code</li>
-    <li id="enc">Encrypt Data</li>
-    <li id="snd">Send Data</li>
-    <li id="rcv">Received Data</li>
-    <li id="dec">Data decrypted</li-->
-</ul>
-<div id="hello"></div>
+<div id="intro">
+<h1>Device page.</h1>
+<p>This page acts as one party. This could be an unassociated worker (like 
+a TV or other general display device), or an associated boss (like a computer
+screen).</p>
+<p>It's counter point is a scanning page (like a VR headset, mobile device, or 
+laptop).</p>
+
+<h2>First...</h2>
+<p>On a different device, start the <a id="bob_link">scanner page</a>. Because it's 
+handy to do so, here's a QR code that's a link to that page:</p>
+<div id="bob_qr"></div>
+<p class="note"><b>Note!</b> because of the scanner library I'm using, you'll need to 
+run a firefox browser &lt; 62!<p>
+<button id="continue">Ok, the scanner is running...</button>
+</div>
+<div id="linkup">
+<div id="hello">Waiting for the scanner to connect....</div>
 <div id="qrcode"></div>
+</div>
 <audio src="../common/firefox.mp3" id="ring"></audio>
 <audio src="../common/error.mp3" id="boo"></audio>
 </body>
@@ -227,9 +235,6 @@
     }
     function reset() {
         data = {};
-        for (let x of document.getElementById("steps").getElementsByTagName("li")) {
-            x.classList.toggle("done");
-        }
     }
 
     function encrypt(data) {
@@ -298,7 +303,22 @@
         }
     });
 
-    register()
-        .then(subscribe());
+    {
+        let path = document.location.pathname.split('/').slice(0,-2).join('/');
+        let loc = `https://${document.location.host}${path}/bob/`;
+        console.debug(loc);
+        document.getElementById("bob_link").href=loc;
+        new QRCode(
+            document.getElementById("bob_qr"),
+            {
+                text: loc
+            });
+    };
+
+    document.getElementById("continue").addEventListener("click", function(event) {
+        document.getElementById("intro").style.display="none";
+        document.getElementById("linkup").style.display="block";
+        register().then(subscribe());
+    });
 </script>
 </html>
