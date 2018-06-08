@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <title>QR-dinate Alice page.</title>
+    <link href="style.css" rel="stylesheet"/>
+    <meta name="viewport" content="width=device-width">
+    <meta name="viewport" content="initial-scale=1.0">
+</head>
+<body>
+<div id="error" class="hidden"></div>
+<ul id="steps">
+    <li id="reg">Register</li>
+    <li id="sub">Get Subscription</li>
+    <!--li id="gen">Generate Data</li>
+    <li id="vap">Generate VAPID</li>
+    <li id="qr">Display QR code</li>
+    <li id="enc">Encrypt Data</li>
+    <li id="snd">Send Data</li>
+    <li id="rcv">Received Data</li>
+    <li id="dec">Data decrypted</li-->
+</ul>
+<div id="hello"></div>
+<video id="preview"></video>
+<audio src="../common/firefox.mp3" id="ring"></audio>
+<audio src="../common/error.mp3" id="boo"></audio>
+</body>
+<script src="../common/common.js"></script>
+<script src="../common/der_lite.js"></script>
+<script src="../common/base64.js"></script>
+<script src="../common/webpush.js"></script>
+<script src="instascan.js"></script>
+<script>
+    'use strict';
+
+    let mzcc = new MozCommon();
+    let data = {};
+    let iam = {"name": "Bob", "email": "bob@example.com"};
+    let test_states = {
+        "reg": false,
+        "sub": false,
+        "gen": false,
+        "vap": false,
+        "enc": false,
+        "snd": false,
+        "rcv": false,
+        "dec": false,
+    };
+    let errs = [];
+    reset();
+    let converse = [
+        "what? Look, I just want to send some tabs to you.",
+        "Maybe we should continue this with WebRTC or something."
+    ];
+
+
+    function activate(id) {
+        try {
+            document.getElementById(id).classList.toggle("undone");
+            test_states[id] = true;
+        }
+        catch (e) {
+            console.warn("Activate failed: " + id + " " +  e.message);
+        }
+    }
+
+    function notify(title, body) {
+        new Notification(title,
+                {
+                    body: body,
+                    icon: "icon.png",
+                });
+    }
+
+    function say(who, says) {
+        let hello = document.getElementById("hello");
+        hello.innerHTML = hello.innerHTML + 
+            "<br><b>"+who+":</b> "+says;
+    }
+
+    function show_results() {
+        let currentLocation = window.location;
+        let status = [];
+        // polyfill for .keys()
+        for (let k in test_states) {
+            if (test_states.hasOwnProperty(k)) {
+                status.push(`${encodeURI(k)}=${encodeURI(test_states[k])}`)
+            }
+        }
+        let state = status.join('&');
+        let err_list = `errs=[${errs.join(', ')}]`;
+        let ok = 'Success';
+        if (errs.length == 0) {
+            ok = 'Failure';
+        }
+        window.history.replaceState({}, ok, `
+            ${currentLocation.pathname}?${state}&${err_list}`);
+    }
+
+    function show_err(msg, e) {
+        let err = document.getElementById("error");
+        if (msg == undefined) {
+            msg = "";
+        }
+        if (msg == false) {
+            err.classList.add("hidden");
+            err.innerHTML = '';
+        } else {
+            if (e != undefined) {
+                msg = `${msg} -> ${e.message}`;
+            }
+            err.innerHTML = msg;
+            err.classList.remove("hidden");
+        }
+        console.error(msg);
+        errs.push(encodeURI(`"${msg}"`));
+        //show_results();
+        document.getElementById("boo").play();
+    }
+
+
+    function register() {
+        /* Register the service worker.
+         Remember, the service worker script must be served either from
+         "localhost" or from a TLS secured site (e.g. https://example.com)
+
+         */
+        return navigator.serviceWorker.register("sw.js")
+                .then(function () {
+                    console.log("Service worker loaded, reloading");
+                    activate("reg");
+                })
+                .catch(function (err) {
+                    if (err.name == "SecurityError" || err.name == "NotSupportedError") {
+                        show_err("Could not start.<br>This page requires a secure " +
+                                "server. (e.g. one that can serve https:// pages). " +
+                                "<br>The page can also be served from `localhost'.");
+                        return
+                    }
+                    show_err(err.message);
+                });
+    }
+
+
+    function subscribe(appServerKey) {
+        /* Fetch an endpoint.
+
+         Yes, this could be a continuation of the above. I've broken it out
+         a little purely to make the page a little less "magical" about what
+         it's doing.
+         */
+        return navigator.serviceWorker.getRegistration()
+                .then(function (registration) {
+                    /* The service worker script has been loaded, so
+                     now we need to register for an endpoint.
+
+                     Normally, you only need to register once, the first
+                     time that you ever load a given app or page.
+
+                     */
+                    function resubscribe() {
+                        return registration.pushManager.subscribe({
+                            // Set this to be "true" if you're only displaying
+                            // the data to the user. Set it to "false" if you
+                            // want to use this notification internally and not
+                            // display a message.
+                            userVisibleOnly: false,
+                            applicationServerKey: appServerKey,
+                        });
+                    }
+
+                    console.debug("Registering...", registration);
+                    // Get the subscription info.
+                    return registration.pushManager.getSubscription()
+                            .then(subscription => {
+                                if (subscription) {
+                                    return subscription.unsubscribe().then(resubscribe);
+                                }
+                                return resubscribe();
+                            })
+                            .then(function (subscription_info) {
+                                let data = {};
+                                activate("sub");
+                                if (!subscription_info.endpoint) {
+                                    show_err("Subscription doesn't have an " +
+                                            "endpoint. Aborting.");
+                                    let err = new Error();
+                                    err.name = "NoEndpoint";
+                                    err.message = "Subscription does not have an endpoint";
+                                    throw err;
+                                }
+                                if (!subscription_info.getKey) {
+                                    show_err("Subscription doesn't allow " +
+                                            "data encryption. Aborting.");
+                                    let err = new Error();
+                                    err.name = "NoData";
+                                    err.message = "Subscription does not allow data";
+                                    throw err;
+                                }
+                                data['endpoint'] = subscription_info.endpoint;
+                                data['receiverKey'] = base64url.encode(subscription_info.getKey('p256dh'));
+                                data['salt'] = base64url.encode(crypto.getRandomValues(
+                                        new Uint8Array(16)));
+                                data['subscription_info'] = subscription_info;
+                                try {
+                                    // Auth key allows for improved Crypto-Key support.
+                                    // However, it's being slowly rolled out.
+                                    let authKey = subscription_info.getKey('auth');
+                                    if (!authKey) {
+                                        console.warn("This browser doesn't support auth key. Please update.");
+                                    }
+                                    data['authKey'] = base64url.encode(authKey);
+                                } catch (e) {
+                                    console.warn("Crypto-Key support unavailable.");
+                                }
+                                return data;
+                            })
+                            .catch(function (err) {
+                                show_err(err.message);
+                            });
+                })
+                .catch(function (err) {
+                    if (err.name == "SecurityError" || err.name == "NotSupportedError") {
+                        show_err("Could not start.<br>This page requires a secure " +
+                                "server. (e.g. one that can serve https:// pages). " +
+                                "<br>The page can also be served from `localhost'.", err);
+                        return
+                    }
+                    show_err("Registration Error");
+                });
+
+    }
+    function reset() {
+        console.debug("Calling reset...");
+        data = {
+            "msg": ""
+        };
+        for (let x of document.getElementById("steps").getElementsByTagName("li")) {
+            x.classList.toggle("done");
+        }
+        activate("gen");
+        return data;
+    }
+
+
+    function encrypt(data) {
+        let receiverKey = data.remote_data.subscription.keys.p256dh
+        let endpoint = data.remote_data.subscription.endpoint;
+        let salt = crypto.getRandomValues(new Uint8Array(16));
+        let msg = data["msg"];
+        console.debug("receiverKey", receiverKey);
+        let rKey = base64url.decode(receiverKey);
+        let authKey;
+        try {
+            // Auth key allows for improved Crypto-Key support.
+            // However, it's being slowly rolled out.
+            authKey = base64url.decode(data.remote_data.subscription.keys.auth);
+            if (authKey) {
+                console.debug("Auth key: ", 
+                        base64url.encode(authKey));
+            }
+        } catch (e) {
+            console.warn("Crypto-Key support unavailable.", e);
+        }
+
+        return webpush({
+                    endpoint: endpoint,
+                    receiverKey: rKey,
+                    authKey: authKey
+                },
+                msg,
+                salt)
+                .then(options => {
+                    // Populate the extra fields
+                    data['osalt'] = base64url.encode(options.salt);
+                    data['odh'] = options.dh;
+                    return send(options);
+                })
+                .catch(e => {
+                    show_err("Error:", e);
+                });
+    }
+
+
+    navigator.serviceWorker.addEventListener('message', function (event) {
+        console.debug('Service Worker sent:', JSON.stringify(event.data));
+        let mm;
+        if (event.data.type == 'hello') {
+            say(event.data.content.iam.name, "<b><i>CONNECTED</i></b>");
+            data.remote_data = event.data.content;
+            mm = converse.shift();
+        }
+        if (event.data.type == 'content') {
+            scanner.stop();
+            document.getElementById("preview").style.display="None";
+            say(event.data.content.iam.name, event.data.content.msg);
+            notify(event.data.content.iam.name + " says...",
+                event.data.content.msg);
+            mm = converse.shift();
+        }
+        if (mm) {
+            data.msg = JSON.stringify({"iam": iam, "msg": mm});
+            say(iam.name, mm);
+            encrypt(data);
+        } else {
+            document.getElementById("ring").play();
+        }
+    });
+
+    function start_comms(content) {
+        data.remote_data = JSON.parse(content);
+        console.debug("Initiating connection with", data.remote_data['iam']);
+        register().then(function(d){console.debug("registered", d);});
+        subscribe().then(subscription_info => {
+            data.subscription_info = subscription_info
+            data.msg = JSON.stringify({
+                "subscription": subscription_info["subscription_info"].toJSON(),
+                "iam": iam});
+    
+            encrypt(data);
+        })
+        .catch(err=>{ show_err(err)});
+        
+    }
+
+    // This lib doesn't work on nightly, use beta instead...
+    let scanner = new Instascan.Scanner({
+        video: document.getElementById("preview"),
+        backgroundScan: false,
+    });
+    scanner.addListener('scan', function(content) {start_comms(content)});
+    Instascan.Camera.getCameras().then(
+        function(cameras) {
+            if (cameras.length > 0) {
+                scanner.start(cameras[0]);
+            } else {
+                show_err("No cameras found");
+            }
+        }).catch(function(e) {
+            show_err(e);
+        });
+</script>
+</html>

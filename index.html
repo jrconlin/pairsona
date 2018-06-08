@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>QRdinate proof of concept</title>
+<link href="style.css" rel="stylesheet" />
+<meta name="viewport" content="width=device-width">
+<meta name="viewport" content="initial-scale=1.0">
+</head>
+<body>
+<h1>QR based push message linkup proof of concept</h1>
+<p>The following proof of concept connects two user agents using a QR code.</p>
+<p>Due to some restrictions, this must be served off of a TLS site, however
+all encryption, message sending and other functions are done in good ol' plain 
+javascript. (please do not judge me on how bad it is, it's a proof of concept.)</p>
+<h2>To Begin</h2>
+<ol>
+<li>Start <a href="https://evilonastick.com/qrdinate/alice/">Alice's page</a> on any firefox (android included)</li>
+<li>Then connect using <a href="https://evilonastick.com/qrdinate/bob/">Bob's page</a> using any firefox &lt; 62. (The capture library does not work on 62)</li>
+</ol>
+<p>The UAs should connect, &amp; exchange some push messages.</p>
+</body>
+</html>
