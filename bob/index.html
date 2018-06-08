@@ -25,6 +25,7 @@
     'use strict';
 
     let mzcc = new MozCommon();
+    let scanner;
     let data = {};
     let iam = {"name": "Bob", "email": "bob@example.com"};
     let test_states = {
@@ -312,7 +313,7 @@
 
     // This lib doesn't work on nightly, use beta instead...
     try {
-        let scanner = new Instascan.Scanner({
+        scanner = new Instascan.Scanner({
             video: document.getElementById("preview"),
             backgroundScan: false,
             mirror: false,
